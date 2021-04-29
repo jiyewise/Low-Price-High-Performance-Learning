@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 import gzip
-import openml
+# import openml
 import os
 import argparse
 from dataset import get_dataset, get_handler
@@ -26,12 +26,12 @@ from query_strategies import RandomSampling, BadgeSampling, \
 # code based on https://github.com/ej0cl6/deep-active-learning"
 parser = argparse.ArgumentParser()
 parser.add_argument('--alg', help='acquisition algorithm', type=str, default='badge')
-# parser.add_argument('--did', help='openML dataset index, if any', type=int, default=0)
+parser.add_argument('--did', help='openML dataset index, if any', type=int, default=0)
 parser.add_argument('--lr', help='learning rate', type=float, default=1e-4)
 parser.add_argument('--model', help='model - resnet, vgg, or mlp', type=str, default='resnet')
 parser.add_argument('--path', help='data path', type=str, default='data')
-parser.add_argument('--data', help='dataset (non-openML)', type=str, default='')
-parser.add_argument('--nQuery', help='number of points to query in a batch', type=int, default=100)
+parser.add_argument('--data', help='dataset (non-openML)', type=str, default='CIFAR10')
+parser.add_argument('--nQuery', help='number of points to query in a batch', type=int, default=1000)
 parser.add_argument('--nStart', help='number of points to start', type=int, default=100)
 parser.add_argument('--nEnd', help = 'total number of points to query', type=int, default=50000)
 parser.add_argument('--nEmb', help='number of embedding dims (mlp)', type=int, default=256)
@@ -43,7 +43,7 @@ NUM_QUERY = opts.nQuery
 NUM_ROUND = int((opts.nEnd - NUM_INIT_LB)/ opts.nQuery)
 DATA_NAME = opts.data
 
-# non-openml data defaults
+# data defaults
 args_pool = {'MNIST':
                 {'n_epoch': 10, 'transform': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]),
                  'loader_tr_args':{'batch_size': 64, 'num_workers': 1},
@@ -61,14 +61,14 @@ args_pool = {'MNIST':
                  'optimizer_args':{'lr': 0.01, 'momentum': 0.5}},
             'CIFAR10':
                 {'n_epoch': 3, 'transform': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))]),
-                 'loader_tr_args':{'batch_size': 128, 'num_workers': 1},
+                 'loader_tr_args':{'batch_size': 8, 'num_workers': 1},
                  'loader_te_args':{'batch_size': 1000, 'num_workers': 1},
                  'optimizer_args':{'lr': 0.05, 'momentum': 0.3},
                  'transformTest': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))])}
                 }
 args_pool['CIFAR10'] = {'n_epoch': 3, 
     'transform': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470,     0.2435, 0.2616))]),
-    'loader_tr_args':{'batch_size': 128, 'num_workers': 3},
+    'loader_tr_args':{'batch_size': 8, 'num_workers': 3},
     'loader_te_args':{'batch_size': 1000, 'num_workers': 1},
     'optimizer_args':{'lr': 0.05, 'momentum': 0.3},
     'transformTest': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))])    
@@ -83,9 +83,6 @@ if opts.did == 0: args = args_pool[DATA_NAME]
 if not os.path.exists(opts.path):
     os.makedirs(opts.path)
 
-
-
-# load non-openml dataset
 X_tr, Y_tr, X_te, Y_te = get_dataset(DATA_NAME, opts.path)
 opts.dim = np.shape(X_tr)[1:]
 handler = get_handler(opts.data)
@@ -95,6 +92,9 @@ args['lr'] = opts.lr
 # start experiment
 n_pool = len(Y_tr)
 n_test = len(Y_te)
+# number of labeled pool: 100
+# number of unlabeled pool: 49900
+# number of testing pool: 10000
 print('number of labeled pool: {}'.format(NUM_INIT_LB), flush=True)
 print('number of unlabeled pool: {}'.format(n_pool - NUM_INIT_LB), flush=True)
 print('number of testing pool: {}'.format(n_test), flush=True)
@@ -105,48 +105,64 @@ idxs_tmp = np.arange(n_pool)
 np.random.shuffle(idxs_tmp)
 idxs_lb[idxs_tmp[:NUM_INIT_LB]] = True
 
-# linear model class
-class linMod(nn.Module):
-    def __init__(self, nc=1, sz=28):
-        super(linMod, self).__init__()
-        self.lm = nn.Linear(int(np.prod(dim)), opts.nClasses)
-    def forward(self, x):
-        x = x.view(-1, int(np.prod(dim)))
-        out = self.lm(x)
-        return out, x
-    def get_embedding_dim(self):
-        return int(np.prod(dim))
+# # linear model class
+# class linMod(nn.Module):
+#     def __init__(self, nc=1, sz=28):
+#         super(linMod, self).__init__()
+#         self.lm = nn.Linear(int(np.prod(dim)), opts.nClasses)
+#     def forward(self, x):
+#         x = x.view(-1, int(np.prod(dim)))
+#         out = self.lm(x)
+#         return out, x
+#     def get_embedding_dim(self):
+#         return int(np.prod(dim))
 
 # mlp model class
-class mlpMod(nn.Module):
-    def __init__(self, dim, embSize=256):
-        super(mlpMod, self).__init__()
-        self.embSize = embSize
-        self.dim = int(np.prod(dim))
-        self.lm1 = nn.Linear(self.dim, embSize)
-        self.lm2 = nn.Linear(embSize, opts.nClasses)
-    def forward(self, x):
-        x = x.view(-1, self.dim)
-        emb = F.relu(self.lm1(x))
-        out = self.lm2(emb)
-        return out, emb
-    def get_embedding_dim(self):
-        return self.embSize
+# class mlpMod(nn.Module):
+#     def __init__(self, dim, embSize=256):
+#         super(mlpMod, self).__init__()
+#         self.embSize = embSize
+#         self.dim = int(np.prod(dim))
+#         self.lm1 = nn.Linear(self.dim, embSize)
+#         self.lm2 = nn.Linear(embSize, opts.nClasses)
+#     def forward(self, x):
+#         x = x.view(-1, self.dim)
+#         emb = F.relu(self.lm1(x))
+#         out = self.lm2(emb)
+#         return out, emb
+#     def get_embedding_dim(self):
+#         return self.embSize
 
 # load specified network
-if opts.model == 'mlp':
-    net = mlpMod(opts.dim, embSize=opts.nEmb)
-elif opts.model == 'resnet':
-    net = resnet.ResNet18()
-elif opts.model == 'vgg':
-    net = vgg.VGG('VGG16')
+# if opts.model == 'mlp':
+#     net = mlpMod(opts.dim, embSize=opts.nEmb)
+
+if opts.model == 'resnet':
+    # net = resnet.ResNet18()
+    # TODO : change to FixMatch ResNext
+    if opts.data == 'CIFAR10':
+        num_classes = 10
+        model_cardinality = 8
+        model_depth = 29
+        model_width = 64
+    elif opts.data == "CIFAR100":
+        num_classes = 100
+        model_cardinality = 4
+        model_depth = 28
+        model_width = 4
+
+    import resnext as model
+    net = model.build_resnext(model_cardinality, model_depth, model_width, num_classes)
+
+# elif opts.model == 'vgg':
+#     net = vgg.VGG('VGG16')
 else: 
     print('choose a valid model - mlp, resnet, or vgg', flush=True)
     raise ValueError
 
-if opts.did > 0 and opts.model != 'mlp':
-    print('openML datasets only work with mlp', flush=True)
-    raise ValueError
+# if opts.did > 0 and opts.model != 'mlp':
+#     print('openML datasets only work with mlp', flush=True)
+#     raise ValueError
 
 if type(X_tr[0]) is not np.ndarray:
     X_tr = X_tr.numpy()
@@ -175,7 +191,6 @@ else:
     raise ValueError
 
 # print info
-if opts.did > 0: DATA_NAME='OML' + str(opts.did)
 print(DATA_NAME, flush=True)
 print(type(strategy).__name__, flush=True)
 
@@ -186,6 +201,7 @@ acc = np.zeros(NUM_ROUND+1)
 acc[0] = 1.0 * (Y_te == P).sum().item() / len(Y_te)
 print(str(opts.nStart) + '\ttesting accuracy {}'.format(acc[0]), flush=True)
 
+NUM_ROUND = 2
 for rd in range(1, NUM_ROUND+1):
     print('Round {}'.format(rd), flush=True)
 
@@ -207,4 +223,3 @@ for rd in range(1, NUM_ROUND+1):
     print(str(sum(idxs_lb)) + '\t' + 'testing accuracy {}'.format(acc[rd]), flush=True)
     if sum(~strategy.idxs_lb) < opts.nQuery: 
         sys.exit('too few remaining points to query')
-
