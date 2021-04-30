@@ -27,7 +27,7 @@ import visdom
 from tqdm import tqdm
 
 # Custom
-import models.resnet as resnet
+import models.resnext as resnext
 import models.lossnet as lossnet
 from config import *
 from data.sampler import SubsetSequentialSampler
@@ -276,7 +276,19 @@ if __name__ == '__main__':
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
         # Model
-        resnet18    = resnet.ResNet18(num_classes=10).cuda()
+        # resnet18    = resnet.ResNet18(num_classes=10).cuda()
+        if data_set == 'c10':
+            num_classes = 10
+            model_cardinality = 8
+            model_depth = 29
+            model_width = 64
+        elif data_set == "c100":
+            num_classes = 100
+            model_cardinality = 4
+            model_depth = 28
+            model_width = 4
+
+        resnet18    = resnext.build_resnext(model_cardinality, model_depth, model_width, num_classes).cuda()
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = False
