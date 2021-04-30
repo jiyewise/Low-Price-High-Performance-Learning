@@ -5,7 +5,7 @@
 # Learning Loss for Active Learning
 NUM_TRAIN = 50000 # N
 NUM_VAL   = 50000 - NUM_TRAIN
-BATCH     = 128 # B
+BATCH     = 4 # B
 SUBSET    = 10000 # M
 ADDENDUM  = 1000 # K
 

@@ -158,14 +158,14 @@ class CifarResNeXt(nn.Module):
     def forward(self, x):
         x = self.conv_1_3x3.forward(x)
         x = self.act(self.bn_1.forward(x))
-        x = self.stage_1.forward(x)
-        x = self.stage_2.forward(x)
-        x = self.stage_3.forward(x)
-        x = F.adaptive_avg_pool2d(x, 1)
+        x1 = self.stage_1.forward(x)
+        x2 = self.stage_2.forward(x1)
+        x3 = self.stage_3.forward(x2)
+        x = F.adaptive_avg_pool2d(x3, 1)
         out = x.view(-1, self.stages[3])
         # from IPython import embed
         # embed()
-        return self.classifier(out)
+        return self.classifier(out), [x1, x2, x3]
 
     def get_embedding_dim(self):
         return self.embDim

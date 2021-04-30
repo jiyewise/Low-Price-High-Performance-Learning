@@ -147,7 +147,7 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
             features[0] = features[0].detach()
             features[1] = features[1].detach()
             features[2] = features[2].detach()
-            features[3] = features[3].detach()
+            # features[3] = features[3].detach()
         pred_loss = models['module'](features)
         pred_loss = pred_loss.view(pred_loss.size(0))
 
