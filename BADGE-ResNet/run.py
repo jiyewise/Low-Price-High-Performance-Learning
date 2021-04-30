@@ -5,9 +5,9 @@ import gzip
 import os
 import argparse
 from dataset import get_dataset, get_handler
-from model import get_net
-import vgg
-import resnet
+# from model import get_net
+# import vgg
+# import resnet
 from sklearn.preprocessing import LabelEncoder
 import torch.nn.functional as F
 from torch import nn

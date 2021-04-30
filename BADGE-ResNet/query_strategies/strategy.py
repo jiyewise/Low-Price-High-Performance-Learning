@@ -8,7 +8,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from copy import deepcopy
 import pdb
-import resnet
+# import resnet
 
 class Strategy:
     def __init__(self, X, Y, idxs_lb, net, handler, args):
@@ -60,7 +60,7 @@ class Strategy:
    
         epoch = 1
         accCurrent = 0.
-        while accCurrent < 0.99: 
+        while accCurrent < 0.9: 
             accCurrent = self._train(epoch, loader_tr, optimizer)
             epoch += 1
             print(str(epoch) + ' training accuracy: ' + str(accCurrent), flush=True)

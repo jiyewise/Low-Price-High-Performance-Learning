@@ -13,8 +13,8 @@ import torch
 from torch import nn
 import torchfile
 from torch.autograd import Variable
-import resnet
-import vgg
+# import resnet
+# import vgg
 import torch.optim as optim
 import pdb
 from torch.nn import functional as F
@@ -40,7 +40,8 @@ from sklearn.utils import check_random_state
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.validation import FLOAT_DTYPES
 from sklearn.metrics.pairwise import rbf_kernel as rbf
-from sklearn.externals.six import string_types
+# from sklearn.externals.six import strig_types
+from six import StringIO
 from sklearn.exceptions import ConvergenceWarning
 
 def gram_red(L, L_inv, u_loc):
