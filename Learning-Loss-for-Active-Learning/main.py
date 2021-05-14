@@ -287,7 +287,7 @@ if __name__ == '__main__':
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
 
-        resnet18    = resnet.ResNet18(num_classes=100).cuda()
+        resnet18    = resnet.ResNet18(num_classes=num_classes).cuda()
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = False
