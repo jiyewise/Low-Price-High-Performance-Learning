@@ -259,8 +259,19 @@ def get_uncertainty(models, unlabeled_loader):
 ##
 # Main
 if __name__ == '__main__':
+
+
+
     #vis = visdom.Visdom(server='http://localhost', port=9000)
     plot_data = {'X': [], 'Y': [], 'legend': ['Backbone Loss', 'Module Loss', 'Total Loss']}
+
+    # Model
+    if data_set == 'c10':
+      num_classes = 10
+      dir_name = 'cifar10'
+    else:
+      num_classes = 100
+      dir_name = 'cifar100'
 
     for trial in range(TRIALS):
         # Initialize a labeled dataset by randomly sampling K=ADDENDUM=1,000 data points from the entire dataset.
@@ -275,8 +286,8 @@ if __name__ == '__main__':
         test_loader  = DataLoader(cifar_test, batch_size=BATCH)
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
-        # Model
-        resnet18    = resnet.ResNet18(num_classes=10).cuda()
+
+        resnet18    = resnet.ResNet18(num_classes=100).cuda()
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = False
@@ -327,11 +338,6 @@ if __name__ == '__main__':
                                               sampler=SubsetRandomSampler(labeled_set), 
                                               pin_memory=True)
     
-        if data_set == 'c10':
-            dir_name = 'cifar10'
-        else:
-            dir_name = 'cifar100'
-
         # Save a checkpoint
         torch.save({
                     'trial': trial + 1,
