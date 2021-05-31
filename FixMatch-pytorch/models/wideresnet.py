@@ -116,6 +116,19 @@ class WideResNet(nn.Module):
         out = out.view(-1, self.channels)
         return self.fc(out)
 
+    def get_emb(self, x):
+        out = self.conv1(x)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.relu(self.bn1(out))
+        out = F.adaptive_avg_pool2d(out, 1)
+        out = out.view(-1, self.channels)
+        return out
+
+    def get_embedding_dim(self):
+        return self.channels
+
 
 def build_wideresnet(depth, widen_factor, dropout, num_classes):
     logger.info(f"Model: WideResNet {depth}x{widen_factor}")
