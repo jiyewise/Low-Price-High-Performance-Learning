@@ -78,7 +78,7 @@ def main():
                         help='number of labeled data')
     parser.add_argument("--expand-labels", action="store_true",
                         help="expand labels to fit eval steps")
-    parser.add_argument('--arch', default='resnext', type=str,
+    parser.add_argument('--arch', default='wideresent', type=str,
                         choices=['wideresnet', 'resnext'],
                         help='dataset name')
     parser.add_argument('--total-steps', default=2**20, type=int,
