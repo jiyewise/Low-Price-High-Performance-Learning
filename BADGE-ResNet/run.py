@@ -26,18 +26,20 @@ from query_strategies import RandomSampling, BadgeSampling, \
 # code based on https://github.com/ej0cl6/deep-active-learning"
 parser = argparse.ArgumentParser()
 parser.add_argument('--alg', help='acquisition algorithm', type=str, default='badge')
+parser.add_argument('--name', help='test_name', type=str, default='test')
 parser.add_argument('--did', help='openML dataset index, if any', type=int, default=0)
 parser.add_argument('--lr', help='learning rate', type=float, default=1e-4)
 parser.add_argument('--model', help='model - resnet, vgg, or mlp', type=str, default='resnet')
 parser.add_argument('--path', help='data path', type=str, default='data')
 parser.add_argument('--data', help='dataset (non-openML)', type=str, default='CIFAR10')
 parser.add_argument('--nQuery', help='number of points to query in a batch', type=int, default=1000)
-parser.add_argument('--nStart', help='number of points to start', type=int, default=100)
+parser.add_argument('--nStart', help='number of points to start', type=int, default=1000)
 parser.add_argument('--nEnd', help = 'total number of points to query', type=int, default=50000)
 parser.add_argument('--nEmb', help='number of embedding dims (mlp)', type=int, default=256)
 opts = parser.parse_args()
 
 # parameters
+# NUM_INIT_LB = opts.nStart
 NUM_INIT_LB = opts.nStart
 NUM_QUERY = opts.nQuery
 NUM_ROUND = int((opts.nEnd - NUM_INIT_LB)/ opts.nQuery)
@@ -61,14 +63,14 @@ args_pool = {'MNIST':
                  'optimizer_args':{'lr': 0.01, 'momentum': 0.5}},
             'CIFAR10':
                 {'n_epoch': 3, 'transform': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))]),
-                 'loader_tr_args':{'batch_size': 8, 'num_workers': 1},
+                 'loader_tr_args':{'batch_size': 128, 'num_workers': 1},
                  'loader_te_args':{'batch_size': 1000, 'num_workers': 1},
                  'optimizer_args':{'lr': 0.05, 'momentum': 0.3},
                  'transformTest': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))])}
                 }
 args_pool['CIFAR10'] = {'n_epoch': 3, 
     'transform': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470,     0.2435, 0.2616))]),
-    'loader_tr_args':{'batch_size': 8, 'num_workers': 3},
+    'loader_tr_args':{'batch_size': 128, 'num_workers': 3},
     'loader_te_args':{'batch_size': 1000, 'num_workers': 1},
     'optimizer_args':{'lr': 0.05, 'momentum': 0.3},
     'transformTest': transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))])    
@@ -92,9 +94,7 @@ args['lr'] = opts.lr
 # start experiment
 n_pool = len(Y_tr)
 n_test = len(Y_te)
-# number of labeled pool: 100
-# number of unlabeled pool: 49900
-# number of testing pool: 10000
+
 print('number of labeled pool: {}'.format(NUM_INIT_LB), flush=True)
 print('number of unlabeled pool: {}'.format(n_pool - NUM_INIT_LB), flush=True)
 print('number of testing pool: {}'.format(n_test), flush=True)
@@ -138,22 +138,35 @@ idxs_lb[idxs_tmp[:NUM_INIT_LB]] = True
 #     net = mlpMod(opts.dim, embSize=opts.nEmb)
 
 if opts.model == 'resnet':
-    # net = resnet.ResNet18()
-    # TODO : change to FixMatch ResNext
+    net = resnet.ResNet18()
+    # # TODO : change to FixMatch ResNext
+    # if opts.data == 'CIFAR10':
+    #     num_classes = 10
+    #     model_cardinality = 8
+    #     model_depth = 29
+    #     model_width = 64
+    # elif opts.data == "CIFAR100":
+    #     num_classes = 100
+    #     model_cardinality = 4
+    #     model_depth = 28
+    #     model_width = 4
+
+    # import resnext as model
+    # net = model.build_resnext(model_cardinality, model_depth, model_width, num_classes)
+elif opts.model == 'wideresnet':
+    import wideresnet 
     if opts.data == 'CIFAR10':
-        num_classes = 10
-        model_cardinality = 8
-        model_depth = 29
-        model_width = 64
-    elif opts.data == "CIFAR100":
-        num_classes = 100
-        model_cardinality = 4
         model_depth = 28
-        model_width = 4
-
-    import resnext as model
-    net = model.build_resnext(model_cardinality, model_depth, model_width, num_classes)
-
+        model_width = 2
+        num_classes = 10
+    else:
+        model_depth = 28
+        model_width = 8
+        num_classes = 100
+    net = wideresnet.build_wideresnet(depth=model_depth,
+                                            widen_factor=model_width,
+                                            dropout=0,
+                                            num_classes=num_classes)
 # elif opts.model == 'vgg':
 #     net = vgg.VGG('VGG16')
 else: 
@@ -194,14 +207,17 @@ else:
 print(DATA_NAME, flush=True)
 print(type(strategy).__name__, flush=True)
 
+# testing accuracy log
+acc_log = []
 # round 0 accuracy
 strategy.train()
 P = strategy.predict(X_te, Y_te)
 acc = np.zeros(NUM_ROUND+1)
 acc[0] = 1.0 * (Y_te == P).sum().item() / len(Y_te)
 print(str(opts.nStart) + '\ttesting accuracy {}'.format(acc[0]), flush=True)
+acc_log.append(acc[0])
 
-NUM_ROUND = 2
+# NUM_ROUND = 2
 for rd in range(1, NUM_ROUND+1):
     print('Round {}'.format(rd), flush=True)
 
@@ -221,5 +237,33 @@ for rd in range(1, NUM_ROUND+1):
     P = strategy.predict(X_te, Y_te)
     acc[rd] = 1.0 * (Y_te == P).sum().item() / len(Y_te)
     print(str(sum(idxs_lb)) + '\t' + 'testing accuracy {}'.format(acc[rd]), flush=True)
+    acc_log.append(acc[rd])
+
     if sum(~strategy.idxs_lb) < opts.nQuery: 
+        # save log
+        if not os.path.exists("./output/"):
+            os.mkdir("./output/")
+
+        directory = "./output/" + opts.alg + "/"
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+
+        np.save(directory+"testAcc.npy", np.array(acc_log))
+        print(acc_log)
         sys.exit('too few remaining points to query')
+
+print("for loop finished")
+# save log
+if not os.path.exists("./output/"):
+	os.mkdir("./output/")
+
+directory = "./output/" + opts.name + "/"
+if not os.path.exists(directory):
+	os.mkdir(directory)
+
+np.save(directory+"testAcc.npy", np.array(acc_log))
+print(acc_log)
+
+
+
+
