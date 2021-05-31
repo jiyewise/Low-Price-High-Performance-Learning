@@ -1,5 +1,4 @@
 '''Active Learning Procedure in PyTorch.
-
 Reference:
 [Yoo et al. 2019] Learning Loss for Active Learning (https://arxiv.org/abs/1905.03677)
 '''
@@ -155,7 +154,11 @@ def train_epoch(models, criterion, optimizers, dataloaders, epoch, epoch_loss, v
         m_module_loss   = LossPredLoss(pred_loss, target_loss, margin=MARGIN)
         loss            = m_backbone_loss + WEIGHT * m_module_loss
 
+        # m_backbone_loss.backward()
+        # m_module_loss *= WEIGHT
+        # loss = torch.from_numpy(loss).float().to(device)
         loss.backward()
+        # m_module_loss.backward()
         optimizers['backbone'].step()
         optimizers['module'].step()
 
@@ -259,20 +262,10 @@ def get_uncertainty(models, unlabeled_loader):
 ##
 # Main
 if __name__ == '__main__':
-
-
-
     #vis = visdom.Visdom(server='http://localhost', port=9000)
     plot_data = {'X': [], 'Y': [], 'legend': ['Backbone Loss', 'Module Loss', 'Total Loss']}
 
-    # Model
-    if data_set == 'c10':
-      num_classes = 10
-      dir_name = 'cifar10'
-    else:
-      num_classes = 100
-      dir_name = 'cifar100'
-
+    acc_log = []
     for trial in range(TRIALS):
         # Initialize a labeled dataset by randomly sampling K=ADDENDUM=1,000 data points from the entire dataset.
         indices = list(range(NUM_TRAIN))
@@ -286,13 +279,14 @@ if __name__ == '__main__':
         test_loader  = DataLoader(cifar_test, batch_size=BATCH)
         dataloaders  = {'train': train_loader, 'test': test_loader}
         
-
-        resnet18    = resnet.ResNet18(num_classes=num_classes).cuda()
+        # Model
+        resnet18    = resnet.ResNet18(num_classes=10).cuda()
         loss_module = lossnet.LossNet().cuda()
         models      = {'backbone': resnet18, 'module': loss_module}
         torch.backends.cudnn.benchmark = False
 
-        # Active learning cycles
+        # Active learning cyclesf
+        acc_per_cycle = []
         for cycle in range(CYCLES):
             # Loss, criterion and scheduler (re)initialization
             criterion      = nn.CrossEntropyLoss(reduction='none')
@@ -310,7 +304,7 @@ if __name__ == '__main__':
             train(models, criterion, optimizers, schedulers, dataloaders, EPOCH, EPOCHL, None, plot_data)
             acc = test(models, dataloaders, mode='test')
             print('Trial {}/{} || Cycle {}/{} || Label set size {}: Test acc {}'.format(trial+1, TRIALS, cycle+1, CYCLES, len(labeled_set), acc))
-
+            acc_per_cycle.append(acc)
             ##
             #  Update the labeled dataset via loss prediction-based uncertainty measurement
 
@@ -337,7 +331,15 @@ if __name__ == '__main__':
             dataloaders['train'] = DataLoader(cifar_train, batch_size=BATCH, 
                                               sampler=SubsetRandomSampler(labeled_set), 
                                               pin_memory=True)
+        print("Trial {} accuracy log".format(trial))
+        print(acc_per_cycle)
+        acc_log.append(acc_per_cycle)    
     
+        if data_set == 'c10':
+            dir_name = 'cifar10'
+        else:
+            dir_name = 'cifar100'
+
         # Save a checkpoint
         torch.save({
                     'trial': trial + 1,
@@ -345,3 +347,4 @@ if __name__ == '__main__':
                     'state_dict_module': models['module'].state_dict()
                 },
                 './%s/train/weights/active_resnet18_%s_trial%s.pth' % (dir_name, dir_name, trial))
+    print(acc_log)
