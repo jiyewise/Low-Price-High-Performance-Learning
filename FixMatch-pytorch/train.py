@@ -78,7 +78,7 @@ def main():
                         help='number of labeled data')
     parser.add_argument("--expand-labels", action="store_true",
                         help="expand labels to fit eval steps")
-    parser.add_argument('--arch', default='wideresnet', type=str,
+    parser.add_argument('--arch', default='resnext', type=str,
                         choices=['wideresnet', 'resnext'],
                         help='dataset name')
     parser.add_argument('--total-steps', default=2**20, type=int,
@@ -87,7 +87,7 @@ def main():
                         help='number of eval steps to run')
     parser.add_argument('--start-epoch', default=0, type=int,
                         help='manual epoch number (useful on restarts)')
-    parser.add_argument('--batch-size', default=64, type=int,
+    parser.add_argument('--batch-size', default=4, type=int,
                         help='train batchsize')
     parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
                         help='initial learning rate')
@@ -321,9 +321,11 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
     unlabeled_iter = iter(unlabeled_trainloader)
 
     model.train()
+    best_acc_log = []
+    mean_acc_log = []
     for epoch in range(args.start_epoch, args.epochs):
         if args.world_size > 1:
-            
+            continue
         if not args.no_progress:
             p_bar = tqdm(range(args.eval_step),
                          disable=args.local_rank not in [-1, 0])
@@ -440,7 +442,10 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader,
             logger.info('Best top-1 acc: {:.2f}'.format(best_acc))
             logger.info('Mean top-1 acc: {:.2f}\n'.format(
                 np.mean(test_accs[-20:])))
-
+            best_acc_log.append(best_acc)
+            mean_acc_log.append(np.mean(test_accs[-20:]))
+    print(best_acc_log)
+    print(mean_acc_log)
     if args.local_rank in [-1, 0]:
         args.writer.close()
 
